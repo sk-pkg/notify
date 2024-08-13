@@ -154,6 +154,12 @@ When you're done sending messages, close the notifier to ensure all pending mess
 notifier.Close()
 ```
 
+## Documentation
+
+For detailed usage and configuration options, please refer to the [main README](https://github.com/sk-pkg/notify/blob/main/README.MD).
+
+For Lark-specific documentation, see the [Lark README](https://github.com/sk-pkg/notify/blob/main/lark/README.MD).
+
 ## Error Handling
 
 The package provides error returns for all operations. Make sure to check these errors and handle them appropriately in your application.
