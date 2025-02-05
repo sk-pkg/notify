@@ -371,6 +371,11 @@ func (n *notify) StartProcessor() {
 //   - msgID: The ID of the submitted message. If the message ID is not provided, a new one will be generated.
 //   - error: Any error encountered during the process.
 func (n *notify) SubmitMessage(message Message) (msgID string, err error) {
+	_, ok := n.apps[message.SendChannelName]
+	if ok && message.SendTo == "" {
+		return "", errors.New("SendTo is required")
+	}
+
 	// Generate a new message ID if not provided
 	if message.ID == "" {
 		message.ID = n.msgID.New()
@@ -378,7 +383,8 @@ func (n *notify) SubmitMessage(message Message) (msgID string, err error) {
 
 	// Check if we need to generate a card message using the message level and title
 	if shouldGenerateCardMsg(message) {
-		content, ok := message.Content.(string)
+		var content string
+		content, ok = message.Content.(string)
 		if ok {
 			cardContent, err := n.generateTextCardMsgWithLevel(message.MsgLevel, message.Title, content)
 			if err != nil {
