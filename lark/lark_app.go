@@ -80,7 +80,7 @@ func (n *notify) sendLarkAppMessage(token, msgAPI string, m Message) error {
 
 	switch m.MsgType {
 	case "text":
-		marshal, _ = json.Marshal(map[string]any{"text": m.Content.(string)})
+		marshal, err = json.Marshal(map[string]any{"text": m.Content.(string)})
 		if err != nil {
 			return fmt.Errorf("failed to marshal text content: %v", err)
 		}
