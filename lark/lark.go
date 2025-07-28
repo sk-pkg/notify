@@ -149,7 +149,7 @@ type Notify interface {
 	// 	- err: An error that occurred while submitting the message.
 	SubmitMessage(message Message) (msgID string, err error)
 
-	// Token retrieves the access token for a specific Lark App.
+	// GetToken retrieves the access token for a specific Lark App.
 	//
 	// Parameters:
 	// 	- appName: The name of the Lark App.
@@ -157,7 +157,18 @@ type Notify interface {
 	// Returns:
 	// 	- token: The access token for the Lark App.
 	// 	- err: An error that occurred while retrieving the token.
-	Token(appName string) (token string, err error)
+	GetToken(appName string) (token string, err error)
+
+	// SetToken sets the access token for a specific Lark App.
+	//
+	// Parameters:
+	// 	- appName: The name of the Lark App.
+	// 	- token: The access token for the Lark App.
+	// 	- expire: The expiration time of the token in seconds.
+	//
+	// Returns:
+	// 	- err: An error that occurred while setting the token.
+	SetToken(appName string, token string, expire int) error
 
 	// Close stops the notifier, ensuring all pending messages are processed
 	// before shutting down. It waits for all goroutines to finish and releases any resources.
@@ -217,7 +228,7 @@ type notify struct {
 	sendResult chan SendResult
 }
 
-// Token retrieves the access token for a specific Lark App.
+// GetToken retrieves the access token for a specific Lark App.
 //
 // Parameters:
 //   - appName: The name of the Lark App.
@@ -225,13 +236,34 @@ type notify struct {
 // Returns:
 //   - token: The access token for the Lark App.
 //   - err: An error that occurred while retrieving the token.
-func (n *notify) Token(appName string) (token string, err error) {
+func (n *notify) GetToken(appName string) (token string, err error) {
 	a, ok := n.apps[appName]
 	if !ok {
 		return "", fmt.Errorf("lark app %s not found", appName)
 	}
 
 	return a.token()
+}
+
+// SetToken sets the access token for a specific Lark App.
+//
+// Parameters:
+//   - appName: The name of the Lark App.
+//   - token: The access token for the Lark App.
+//   - expire: The expiration time of the token in seconds.
+//
+// Returns:
+//   - err: An error that occurred while setting the token.
+func (n *notify) SetToken(appName string, token string, expire int) error {
+	a, ok := n.apps[appName]
+	if !ok {
+		return fmt.Errorf("lark app %s not found", appName)
+	}
+
+	appID := a.appID
+
+	cacheKey := fmt.Sprintf(tokenCacheKey, appID)
+	return n.cache.SetString(cacheKey, token, expire-200)
 }
 
 // app represents the configuration for a Lark App.
@@ -241,6 +273,9 @@ type app struct {
 
 	// msgAPI is the URL for sending messages through Lark Apps.
 	msgAPI string
+
+	// appID is the unique identifier for the Lark App.
+	appID string
 }
 
 // Message represents a message to be sent via the notifier.
@@ -276,12 +311,12 @@ type Message struct {
 	Content any
 }
 
-// appTokenResp represents the response from the Lark App Token API.
+// appTokenResp represents the response from the Lark App GetToken API.
 type appTokenResp struct {
 	Code           int    `json:"code"`             // Response code, 0 indicates success
 	Msg            string `json:"msg"`              // Error message if the request failed
 	AppAccessToken string `json:"app_access_token"` // The access token for the Lark App
-	Expire         int    `json:"expire"`           // Token expiration time in seconds
+	Expire         int    `json:"expire"`           // GetToken expiration time in seconds
 }
 
 // messageResp represents the response from the Lark Message API.
@@ -318,7 +353,7 @@ func validateConfig(config *Config) error {
 	}
 
 	// Check Lark configurations if only Lark Apps are configured
-	if webhookCount == 0 && larkCount != 0 {
+	if webhookCount == 0 {
 		for name, l := range config.Larks {
 			switch {
 			case l.Token == nil && l.AppID == "" && l.AppSecret == "":
@@ -463,7 +498,7 @@ func New(config Config) (Notify, error) {
 			return nil, fmt.Errorf("invalid lark app type: %s", lark.AppType)
 		}
 
-		// If Token is not provided,
+		// If GetToken is not provided,
 		// lark.AppID and lark.AppSecret will be used to generate the token.
 		if lark.Token == nil {
 			if lark.AppID == "" || lark.AppSecret == "" {
@@ -478,6 +513,7 @@ func New(config Config) (Notify, error) {
 		a := &app{
 			token:  lark.Token,
 			msgAPI: msgAPI,
+			appID:  lark.AppID,
 		}
 
 		n.apps[name] = a
@@ -518,7 +554,7 @@ func (n *notify) getToken(appID, appSecret, appTokenAPI string) (string, error) 
 
 	response, err := n.sendLarkAPIRequest(request, 3)
 	if err != nil {
-		return "", fmt.Errorf("failed to request Lark App Token: %w", err)
+		return "", fmt.Errorf("failed to request Lark App GetToken: %w", err)
 	}
 
 	var rs appTokenResp
@@ -527,7 +563,7 @@ func (n *notify) getToken(appID, appSecret, appTokenAPI string) (string, error) 
 	}
 
 	if rs.Code != 0 {
-		return "", fmt.Errorf("failed to obtain Lark App Token: %s", rs.Msg)
+		return "", fmt.Errorf("failed to obtain Lark App GetToken: %s", rs.Msg)
 	}
 
 	if err = n.cache.SetString(cacheKey, rs.AppAccessToken, rs.Expire-100); err != nil {
