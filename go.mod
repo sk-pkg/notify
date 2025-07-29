@@ -1,6 +1,6 @@
 module github.com/sk-pkg/notify
 
-go 1.22
+go 1.23.11
 
 require (
 	github.com/go-resty/resty/v2 v2.13.1
@@ -8,6 +8,6 @@ require (
 )
 
 require (
-	golang.org/x/net v0.25.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
 )
